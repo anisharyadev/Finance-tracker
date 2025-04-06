@@ -6,37 +6,8 @@
   <title>Finance Tracker</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
-  <script>
-        //Prevent right click
-        document.oncontextmenu = () => {
-            
-            return false
-        }
-        document.onkeydown = e => {
-            //Prevent F12 key
-            if (e.key == "F12") {
-                alert("Don't try to inspect element")
-                return false
-            }
-            //Prevent showing page source by Ctrl + U
-            if (e.ctrlKey && e.key == "u") {
-                return false
-            }
-            //Prevent selecting anything from the page
-            if (e.ctrlKey && e.key == "a") {
-                return false
-            }
-            //Prevent copying anything from the page
-            if (e.ctrlKey && e.key == "c") {
-                return false
-            }
-            //Prevent paste anything from other source
-            if (e.ctrlKey && e.key == "v") {
-                return false
-            }
-        }
-    </script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <style>
     :root {
       --bg-light: #ffffff;
@@ -133,7 +104,7 @@
       <h2>Login / Register</h2>
       <input type="text" id="phone" class="form-control mb-2" placeholder="Phone Number">
       <input type="text" id="name" class="form-control mb-2" placeholder="Your Name">
-      <button onclick="sendOTP()" class="btn btn-primary w-100 mb-2">Send OTP</button>
+      <button onclick="sendOTP()" id="send-otp-btn" class="btn btn-primary w-100 mb-2">Send OTP</button>
       <input type="text" id="otp" class="form-control mb-2 hidden" placeholder="Enter OTP">
       <button onclick="verifyOTP()" id="verify-btn" class="btn btn-success w-100 hidden">Verify OTP</button>
     </div>
@@ -182,167 +153,76 @@
     </div>
   </div>
 
+  <!--
+  apiKey: "AIzaSyAJ61WJYJB8-8WieHttUuIRt_-gdqEKieU",
+  authDomain: "aryadev.firebaseapp.com",
+  databaseURL: "https://aryadev-default-rtdb.firebaseio.com",
+  projectId: "aryadev",
+  storageBucket: "aryadev.appspot.com",
+  messagingSenderId: "382344988386",
+  appId: "1:382344988386:web:361f90c671f3c923da00bb",
+  measurementId: "G-PHQYBT3S3Y"
+  
+  
+  -->
   <script>
-    let currentUser = null;
-    let currentUserName = "";
-    let users = JSON.parse(localStorage.getItem("users") || '{}');
-    let otp = null;
+
+    
+    // Firebase config - replace with your Firebase project settings
+    const firebaseConfig = {
+      apiKey: "AIzaSyAJ61WJYJB8-8WieHttUuIRt_-gdqEKieU",
+      authDomain: "aryadev.firebaseapp.com",
+      databaseURL: "https://aryadev-default-rtdb.firebaseio.com",
+      projectId: "aryadev",
+      storageBucket: "aryadev.appspot.com",
+      messagingSenderId: "382344988386",
+      appId: "1:382344988386:web:361f90c671f3c923da00bb",
+      measurementId: "G-PHQYBT3S3Y"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+
+    let confirmationResult;
 
     function sendOTP() {
       const phone = document.getElementById("phone").value;
       const name = document.getElementById("name").value;
-      if (!phone || !name) return alert("Enter both phone number and name.");
-      otp = Math.floor(1000 + Math.random() * 9000).toString();
-      alert("OTP sent: " + otp);
-      document.getElementById("otp").classList.remove("hidden");
-      document.getElementById("verify-btn").classList.remove("hidden");
+      if (!phone || !name) return alert("Please enter name and phone number.");
+
+      window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('send-otp-btn', {
+        size: 'invisible',
+        callback: () => sendOTP()
+      });
+
+      auth.signInWithPhoneNumber("+91" + phone, window.recaptchaVerifier)
+        .then((result) => {
+          confirmationResult = result;
+          document.getElementById("otp").classList.remove("hidden");
+          document.getElementById("verify-btn").classList.remove("hidden");
+          alert("OTP sent!");
+        })
+        .catch((error) => {
+          console.error(error);
+          alert("Failed to send OTP: " + error.message);
+        });
     }
 
     function verifyOTP() {
-      const inputOtp = document.getElementById("otp").value;
-      const phone = document.getElementById("phone").value;
-      const name = document.getElementById("name").value;
-      if (inputOtp === otp) {
-        if (!users[phone]) {
-          users[phone] = [];
-        }
-        localStorage.setItem("users", JSON.stringify(users));
-        currentUser = phone;
-        currentUserName = name;
-        document.getElementById("user-info").textContent = `${name} (${phone})`;
-        showDashboard();
-      } else {
-        alert("Invalid OTP");
-      }
+      const otp = document.getElementById("otp").value;
+      confirmationResult.confirm(otp)
+        .then((result) => {
+          const user = result.user;
+          localStorage.setItem("user", JSON.stringify({ name: document.getElementById("name").value, phone: user.phoneNumber }));
+          document.getElementById("auth-section").classList.add("hidden");
+          document.getElementById("dashboard").classList.remove("hidden");
+          document.getElementById("user-info").textContent = document.getElementById("name").value;
+        })
+        .catch((error) => {
+          alert("Invalid OTP");
+          console.error(error);
+        });
     }
-
-    function toggleReasonDropdown() {
-      const type = document.getElementById("type").value;
-      const reasonDropdown = document.getElementById("reason");
-      reasonDropdown.classList.toggle("hidden", type !== "expense");
-    }
-
-    function showDashboard() {
-      document.getElementById("auth-section").classList.add("hidden");
-      document.getElementById("dashboard").classList.remove("hidden");
-      renderTransactions();
-    }
-
-    function addTransaction() {
-      const amount = parseFloat(document.getElementById("amount").value);
-      const type = document.getElementById("type").value;
-      const reason = document.getElementById("reason").value;
-      if (!amount || !type || (type === 'expense' && !reason)) return alert("Fill all fields");
-      const data = { amount, type, date: new Date().toISOString(), name: currentUserName };
-      if (type === "expense") data.reason = reason;
-      users[currentUser].push(data);
-      localStorage.setItem("users", JSON.stringify(users));
-      document.getElementById("amount").value = "";
-      renderTransactions();
-    }
-
-    function deleteTransaction(index) {
-      if (confirm("Are you sure you want to delete this transaction?")) {
-        users[currentUser].splice(index, 1);
-        localStorage.setItem("users", JSON.stringify(users));
-        renderTransactions();
-      }
-    }
-
-    function renderTransactions() {
-      const list = document.getElementById("transaction-list");
-      const searchText = document.getElementById("search-box").value.toLowerCase();
-      const startDate = document.getElementById("start-date").value;
-      const endDate = document.getElementById("end-date").value;
-      list.innerHTML = "";
-      let total = 0;
-      let lastDate = "";
-
-      const sortedTxs = [...users[currentUser]].sort((a, b) => new Date(b.date) - new Date(a.date));
-
-      sortedTxs.forEach((tx, i) => {
-        const txText = `${tx.name} ${tx.type} ${tx.amount} ${tx.reason || ''} ${tx.date}`.toLowerCase();
-        const txDate = new Date(tx.date);
-        if (!txText.includes(searchText)) return;
-        if (startDate && txDate < new Date(startDate)) return;
-        if (endDate && txDate > new Date(endDate)) return;
-
-        const txDateStr = txDate.toLocaleDateString();
-        if (txDateStr !== lastDate) {
-          lastDate = txDateStr;
-          const dateHeader = document.createElement("li");
-          dateHeader.className = "date-header list-group-item";
-          dateHeader.textContent = txDateStr;
-          list.appendChild(dateHeader);
-        }
-
-        if (tx.type === "income" || tx.type === "saving") {
-          total += tx.amount;
-        } else if (tx.type === "expense") {
-          total -= tx.amount;
-        }
-
-        const li = document.createElement("li");
-        li.className = `transaction-item list-group-item d-flex justify-content-between align-items-center ${tx.type}`;
-        li.innerHTML = `
-          <div>
-            <strong>${tx.name}</strong><br>
-            <strong>${tx.type}</strong>: ₹${tx.amount} <br>
-            ${tx.reason ? `<em>Reason:</em> ${tx.reason} <br>` : ""}
-            <small>${txDate.toLocaleString()}</small>
-          </div>
-          <button class="btn btn-sm btn-outline-danger" onclick="deleteTransaction(${i})">Delete</button>
-        `;
-        list.appendChild(li);
-      });
-
-      document.getElementById("total-balance").innerText = `₹${total.toFixed(2)}`;
-    }
-
-    function exportToExcel() {
-      const data = users[currentUser].map(tx => ({
-        Name: tx.name || "",
-        Date: new Date(tx.date).toLocaleString(),
-        Type: tx.type,
-        Amount: tx.amount,
-        Reason: tx.reason || ""
-      }));
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Transactions");
-      XLSX.writeFile(wb, `transactions_${currentUser}.xlsx`);
-    }
-
-    function logout() {
-      currentUser = null;
-      otp = null;
-      document.getElementById("dashboard").classList.add("hidden");
-      document.getElementById("auth-section").classList.remove("hidden");
-      document.getElementById("otp").classList.add("hidden");
-      document.getElementById("verify-btn").classList.add("hidden");
-      document.getElementById("otp").value = "";
-      document.getElementById("phone").value = "";
-      document.getElementById("name").value = "";
-    }
-
-    function toggleTheme() {
-      const html = document.documentElement;
-      const newTheme = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-      html.setAttribute('data-theme', newTheme);
-      localStorage.setItem('theme', newTheme);
-    }
-
-    (function restoreTheme() {
-      const savedTheme = localStorage.getItem('theme');
-      if (savedTheme) {
-        document.documentElement.setAttribute('data-theme', savedTheme);
-      }
-    })();
-
-    window.addEventListener("load", () => {
-      const savedUsers = JSON.parse(localStorage.getItem("users") || '{}');
-      users = savedUsers;
-    });
   </script>
 </body>
 </html>
