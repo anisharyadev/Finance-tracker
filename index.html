@@ -6,6 +6,37 @@
   <title>Finance Tracker</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <script>
+        //Prevent right click
+        document.oncontextmenu = () => {
+            
+            return false
+        }
+        document.onkeydown = e => {
+            //Prevent F12 key
+            if (e.key == "F12") {
+                alert("Don't try to inspect element")
+                return false
+            }
+            //Prevent showing page source by Ctrl + U
+            if (e.ctrlKey && e.key == "u") {
+                return false
+            }
+            //Prevent selecting anything from the page
+            if (e.ctrlKey && e.key == "a") {
+                return false
+            }
+            //Prevent copying anything from the page
+            if (e.ctrlKey && e.key == "c") {
+                return false
+            }
+            //Prevent paste anything from other source
+            if (e.ctrlKey && e.key == "v") {
+                return false
+            }
+        }
+    </script>
   <style>
     :root {
       --bg-light: #ffffff;
